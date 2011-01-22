@@ -106,6 +106,8 @@ BEGIN {
         version => 'TAP::Parser::Result::Version',
         unknown => 'TAP::Parser::Result::Unknown',
         yaml    => 'TAP::Parser::Result::YAML',
+        subplan => 'TAP::Parser::Result::SubPlan',
+        subtest => 'TAP::Parser::Result::SubTest',
     );
 }
 

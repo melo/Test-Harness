@@ -174,6 +174,72 @@ my %language_for;
                 );
             },
         },
+
+        ## Subtests
+        simple_subtest => {
+            syntax  => qr/^(\s+)($ok) \ ($num) (?:\ ([^#]+))? \z/x,
+            handler => sub {
+                my ( $self, $line ) = @_;
+                my ( $level, $ok, $num, $desc ) = ( $1, $2, $3, $4 );
+
+                return $self->_make_subtest_token(
+                    $line, $level, $ok, $num,
+                    $desc
+                );
+            },
+        },
+        subtest => {
+            syntax  => qr/^(\s+)($ok) \s* ($num)? \s* (.*) \z/x,
+            handler => sub {
+                my ( $self, $line ) = @_;
+                my ( $level, $ok, $num, $desc ) = ( $1, $2, $3, $4 );
+                my ( $dir, $explanation ) = ( '', '' );
+                if ($desc =~ m/^ ( [^\\\#]* (?: \\. [^\\\#]* )* )
+                       \# \s* (SKIP|TODO) \b \s* (.*) $/ix
+                  )
+                {
+                    ( $desc, $dir, $explanation ) = ( $1, $2, $3 );
+                }
+                return $self->_make_subtest_token(
+                    $line, $level, $ok, $num, $desc,
+                    $dir,  $explanation
+                );
+            },
+        },
+        subplan => {
+            syntax  => qr/^(\s+)1\.\.(\d+)\s*(.*)\z/,
+            handler => sub {
+                my ( $self, $line ) = @_;
+                my ( $level, $tests_planned, $tail ) = ( $1, $2, $3 );
+                my $explanation = undef;
+                my $skip        = '';
+
+                if ( $tail =~ /^todo((?:\s+\d+)+)/ ) {
+                    my @todo = split /\s+/, _trim($1);
+                    return $self->_make_subplan_token(
+                        $line, $level, $tests_planned, 'TODO',
+                        '',    \@todo
+                    );
+                }
+                elsif ( 0 == $tests_planned ) {
+                    $skip = 'SKIP';
+
+                    # If we can't match # SKIP the directive should be undef.
+                    ($explanation) = $tail =~ /^#\s*SKIP\S*\s+(.*)/i;
+                }
+                elsif ( $tail !~ /^\s*$/ ) {
+                    return $self->_make_unknown_token($line);
+                }
+
+                $explanation = '' unless defined $explanation;
+
+                return $self->_make_subplan_token(
+                    $line, $level, $tests_planned, $skip,
+                    $explanation, []
+                );
+
+            },
+        },
     );
 
     my %v13 = (
@@ -266,7 +332,7 @@ sub _order_tokens {
 
     my %copy = %{ $self->{tokens} };
     my @ordered_tokens = grep {defined}
-      map { delete $copy{$_} } qw( simple_test test comment plan );
+      map { delete $copy{$_} } qw( simple_test test comment plan simple_subtest subtest subplan );
     push @ordered_tokens, values %copy;
 
     $self->{ordered_tokens} = \@ordered_tokens;
@@ -411,6 +477,42 @@ sub _make_test_token {
         explanation => _trim($explanation),
         raw         => $line,
         type        => 'test',
+    };
+}
+
+sub _make_subplan_token {
+    my ( $self, $line, $level, $tests_planned, $directive, $explanation, $todo ) = @_;
+
+    if (   $directive eq 'SKIP'
+        && 0 != $tests_planned
+        && $self->{version} < 13 )
+    {
+        warn
+          "Specified SKIP directive in plan but more than 0 tests ($line)\n";
+    }
+
+    return {
+        type          => 'subplan',
+        raw           => $line,
+        tests_planned => $tests_planned,
+        directive     => $directive,
+        explanation   => _trim($explanation),
+        todo_list     => $todo,
+        level         => $level,
+    };
+}
+
+sub _make_subtest_token {
+    my ( $self, $line, $level, $ok, $num, $desc, $dir, $explanation ) = @_;
+    return {
+        level       => $level,
+        ok          => $ok,
+        test_num    => $num,
+        description => _trim($desc),
+        directive   => ( defined $dir ? uc $dir : '' ),
+        explanation => _trim($explanation),
+        raw         => $line,
+        type        => 'subtest',
     };
 }
 

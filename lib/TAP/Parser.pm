@@ -385,8 +385,10 @@ sub make_result           { shift->result_factory_class->make_result(@_); }
     # probably get it from somewhere else to avoid the repetition.
     my @legal_callback = qw(
       test
+      subtest
       version
       plan
+      subplan
       comment
       bailout
       unknown

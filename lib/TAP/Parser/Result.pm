@@ -10,7 +10,7 @@ use TAP::Object ();
 BEGIN {
 
     # make is_* methods
-    my @attrs = qw( plan pragma test comment bailout version unknown yaml );
+    my @attrs = qw( plan pragma test comment bailout version unknown yaml subtest subplan );
     no strict 'refs';
     for my $token (@attrs) {
         my $method = "is_$token";
